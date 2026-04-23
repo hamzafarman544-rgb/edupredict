@@ -11,7 +11,6 @@ const helmet     = require("helmet");
 const morgan     = require("morgan");
 const rateLimit  = require("express-rate-limit");
 
-const connectDB        = require("./config/db");
 const authRoutes       = require("./routes/auth");
 const studentRoutes    = require("./routes/students");
 const predictionRoutes = require("./routes/predictions");
@@ -19,38 +18,75 @@ const predictionRoutes = require("./routes/predictions");
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
-// ─── Security & Middleware ──────────────────────────────────────────────────
+// ─── Security & Middleware ────────────────────────────────────────────────
 app.use(helmet());
+
+// ✅ Clean CORS setup (allow all safely with credentials)
 app.use(cors({
-  origin: true, // reflects request origin
+  origin: true,
   credentials: true
 }));
+
+// ✅ Handle preflight requests early (fixes 502 issue)
+app.options("*", cors());
+
+// ✅ Explicit OPTIONS handler (bulletproof)
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Rate limiting
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: "Too many requests." });
-app.use("/api", limiter);
+// ─── Rate Limiting (skip OPTIONS) ─────────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: "Too many requests."
+});
 
-// ─── Database Connection ───────────────────────────────────────────────────
+app.use("/api", (req, res, next) => {
+  if (req.method === "OPTIONS") return next();
+  return limiter(req, res, next);
+});
+
+// ─── Database Connection ──────────────────────────────────────────────────
 mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/edupredict")
   .then(() => console.log("[DB] MongoDB connected"))
-  .catch((err) => { console.error("[DB] Connection failed:", err); process.exit(1); });
+  .catch((err) => {
+    console.error("[DB] Connection failed:", err);
+    process.exit(1);
+  });
 
 // ─── Routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",        authRoutes);
 app.use("/api/students",    studentRoutes);
 app.use("/api/predictions", predictionRoutes);
 
-app.get("/api/health", (_req, res) => res.json({ status: "ok", timestamp: new Date() }));
-
-// ─── 404 & Error Handler ──────────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: "Route not found" }));
-
-app.use((err, _req, res, _next) => {
-  console.error("[Error]", err.stack);
-  res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+// Health check
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date() });
 });
 
-app.listen(PORT, () => console.log(`[Server] Running on http://localhost:${PORT}`));
+// ─── 404 Handler ──────────────────────────────────────────────────────────
+app.use((_req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+// ─── Global Error Handler ─────────────────────────────────────────────────
+app.use((err, _req, res, _next) => {
+  console.error("[Error]", err.stack);
+  res.status(err.status || 500).json({
+    error: err.message || "Internal server error"
+  });
+});
+
+// ─── Start Server ─────────────────────────────────────────────────────────
+app.listen(PORT, () => {
+  console.log(`[Server] Running on port ${PORT}`);
+});
+
 module.exports = app;
