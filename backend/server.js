@@ -61,6 +61,11 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/edupredict"
     process.exit(1);
   });
 
+
+  app.get("/", (req, res) => {
+  res.send("Backend is LIVE");
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",        authRoutes);
 app.use("/api/students",    studentRoutes);
@@ -85,7 +90,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`[Server] Running on port ${PORT}`);
 });
 
