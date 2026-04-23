@@ -55,7 +55,7 @@ router.post("/", async (req, res) => {
     // ── Call Flask ML microservice ──────────────────────────────────────────
     let mlResult;
     try {
-      const mlResponse = await axios.post(`http://localhost:5001/predict`, features, {
+      const mlResponse = await axios.post(`https://hopeful-acceptance-production-42e4.up.railway.app/predict`, features, {
         timeout: 10000,
         headers: { "Content-Type": "application/json" }
       });
